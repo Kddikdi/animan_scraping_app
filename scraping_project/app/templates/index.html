@@ -1,0 +1,15 @@
+<!-- templates/index -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>index</title>
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <h1>あにまんサイト情報取得</h1>
+    <h1><a href="{{ url_for('get_animan_url') }}">URL抽出</a></h1>
+    <h1><a href="{{ url_for('create_animan_script') }}">台本作成</a></h1>
+</body>
+</html>

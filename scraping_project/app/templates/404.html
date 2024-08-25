@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>ページが見つかりません</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <h1>404 - ページが見つかりません</h1>
+    <p>指定されたページは存在しないか、URLが間違っています。</p>
+    <a href="{{ url_for('index') }}">ホームに戻る</a>
+</body>
+</html>

@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Get Animan URL</title>
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <h1>あにまん URL 抽出</h1>
+    <form action="/get_animan_url" method="POST">
+        <label for="excel_title">出力Excel名:</label>
+        <input type="text" id="excel_title" name="excel_title" required><br>
+
+        <label for="sheet_title">シート名（任意）:</label>
+        <input type="text" id="sheet_title" name="sheet_title"><br>
+
+        <label for="stop_title">取得終了タイトル（指定しなければ全ての情報を取得します）:</label>
+        <input type="text" id="stop_title" name="stop_title"><br>
+
+        <label for="base_url">取得元URL:</label>
+        <input type="text" id="base_url" name="base_url" required><br>
+
+        <label for="start_url">取得開始URLを挿入:</label>
+        <input type="text" id="start_url" name="start_url" required><br>
+
+        <input type="submit" value="URL抽出開始">
+    </form>
+
+    <p><a href="{{ url_for('index') }}">Back to Home</a></p>
+</body>
+</html>
