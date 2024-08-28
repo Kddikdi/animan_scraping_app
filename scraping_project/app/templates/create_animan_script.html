@@ -9,7 +9,26 @@
 <body>
     <h1>台本作成</h1>
     <form action="{{ url_for('create_animan_script') }}" method="POST" onsubmit="return showPopup()">
+        <!-- 抽出元URLの入力 -->
+        <label for="URL">抽出元URL:</label>
         <input type="text" id="url" name="url" placeholder="URLを入力" required>
+        <!-- タイトルコール音声選択 -->
+        <label for="title_voice">タイトルコール音声:</label>
+        <select id="title_voice" name="title_voice">
+            <option value="default" selected>デフォルト</option>
+            <option value="voice1">キャラクター1</option>
+            <option value="voice2">キャラクター2</option>
+            <!-- 他のオプションを追加できます -->
+        </select>
+
+        <!-- 読み上げ音声選択 -->
+        <label for="narration_voice">読み上げ音声のキャラクター:</label>
+        <select id="narration_voice" name="narration_voice">
+            <option value="default" selected>デフォルト</option>
+            <option value="voice1">キャラクター1</option>
+            <option value="voice2">キャラクター2</option>
+            <!-- 他のオプションを追加できます -->
+        </select>
         <p><input type="submit" value="作成"></p>
     </form>
     <a href="{{ url_for('index') }}">HOME</a>

@@ -8,6 +8,10 @@ def register_routes(app):
     def index():
         return render_template('index.html')
 
+    @app.route('/get_onsei_index', methods=['GET', 'POST'])
+    def get_onsei_index():
+        return render_template('get_onsei_index.html')
+
     @app.route('/get_animan_url', methods=['GET', 'POST'])
     def get_animan_url():
         if request.method == 'POST':
@@ -53,5 +57,6 @@ def register_routes(app):
     @app.errorhandler(404)
     def page_not_found(e):
         return render_template('404.html'), 404
+
 
     return app
