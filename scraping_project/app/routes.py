@@ -1,6 +1,6 @@
 from flask import render_template, request, redirect, url_for, session, flash
-from .create_animan_script import main
-from .get_animan_url import main as get_animan_main
+from .contorollers.create_animan_script import main
+from .contorollers.get_animan_url import main as get_animan_main
 
 
 def register_routes(app):
