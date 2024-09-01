@@ -8,6 +8,25 @@
 </head>
 <body>
   <h1>テスト</h1>
+  <form action="{{ url_for('get_onsei_index') }}" method="post">
+    <button type="submit">データを抽出</button>
+  </form>
+  <table>
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>名前</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for voice in voices %}
+        <tr>
+            <td>{{ voice.id }}</td>
+            <td>{{ voice.name }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+  </table>
   <p><a href="{{ url_for('index') }}">Back to Home</a></p>
 </body>
 </html>
