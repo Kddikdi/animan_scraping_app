@@ -80,3 +80,37 @@ select {
   cursor: pointer;
   box-sizing: border-box; /* ボックスサイズを調整 */
 }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 20px;
+}
+
+th, td {
+  padding: 10px;
+  border: 1px solid #ddd;
+  text-align: left;
+}
+
+thead {
+  background-color: #f9f9f9;
+}
+
+th {
+  font-weight: bold;
+}
+
+
+button {
+  background-color: #007bff;
+  color: #fff;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+button:hover {
+  background-color: #0056b3;
+}
