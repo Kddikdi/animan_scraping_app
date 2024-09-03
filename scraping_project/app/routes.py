@@ -2,8 +2,7 @@ from flask import render_template, request, redirect, url_for, session, flash
 from .contorollers.create_animan_script import main
 from .contorollers.get_animan_url import main as get_animan_main
 from .contorollers.get_onsei_index import main as get_onsei_index_main
-from .models import Voice
-
+from app.models import Voice
 
 
 def register_routes(app):
@@ -55,7 +54,8 @@ def register_routes(app):
             except Exception as e:
                 flash(f'エラーが発生しました: {str(e)}')
                 return redirect(url_for('error'))
-        return render_template('create_animan_script.html')
+        voices = Voice.query.all()
+        return render_template('create_animan_script.html', voices=voices)
 
     @app.route('/success')
     def success():

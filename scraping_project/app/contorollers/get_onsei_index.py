@@ -5,6 +5,10 @@ from app.models import Voice, db
 
 
 def main():
+    # 既存のデータを全て削除
+    db.session.query(Voice).delete()
+    db.session.commit()
+
     url = "https://voicevox.hiroshiba.jp/"
     html = requests.get(url)
     soup = BeautifulSoup(html.text, 'html.parser')

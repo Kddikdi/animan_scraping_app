@@ -5,6 +5,32 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>台本作成ページ</title>
     <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='styles.css') }}">
+    <script>
+        // JavaScriptで人数に応じてキャラクター選択欄を追加する
+        function updateCharacterSelection() {
+            const count = document.getElementById('narration_count').value;
+            const container = document.getElementById('character-selection-container');
+            container.innerHTML = ''; // 既存の選択肢をクリア
+
+            for (let i = 0; i < count; i++) {
+                const label = document.createElement('label');
+                label.textContent = キャラクター ${i + 1};
+                const select = document.createElement('select');
+                select.name = narration_voice_${i+1};
+
+                {% for voice in voices %}
+                const option = document.createElement('option');
+                option.value = "{{ voice.name }}";
+                option.textContent = "{{ voice.name }}";
+                select.appendChild(option);
+                {% endfor %}
+
+                container.appendChild(label);
+                container.appendChild(select);
+                container.appendChild(document.createElement('br'));
+            }
+        }
+    </script>
 </head>
 <body>
     <h1>台本作成</h1>
@@ -15,20 +41,27 @@
         <!-- タイトルコール音声選択 -->
         <label for="title_voice">タイトルコール音声:</label>
         <select id="title_voice" name="title_voice">
-            <option value="default" selected>デフォルト</option>
-            <option value="voice1">キャラクター1</option>
-            <option value="voice2">キャラクター2</option>
-            <!-- 他のオプションを追加できます -->
+            {% for voice in voices %}
+            <option value="{{ voice.name }}" {% if voice.name == '四国めたん' %}selected{% endif %}>{{ voice.name }}</option>
+            {% endfor %}
         </select>
+        <!-- 読み上げ人数選択 -->
+        <label for="narration_count">読み上げ人数:</label>
+        <input type="number" id="narration_count" name="narration_count" value="1" min="1" max="10" onchange="updateCharacterSelection()">
 
         <!-- 読み上げ音声選択 -->
         <label for="narration_voice">読み上げ音声のキャラクター:</label>
-        <select id="narration_voice" name="narration_voice">
-            <option value="default" selected>デフォルト</option>
-            <option value="voice1">キャラクター1</option>
-            <option value="voice2">キャラクター2</option>
-            <!-- 他のオプションを追加できます -->
-        </select>
+        <!-- キャラクター選択を表示するためのコンテナ -->
+        <div id="character-selection-container">
+            <!-- 初期状態で1人分のキャラクター選択を表示 -->
+            <label for="narration_voice_1">キャラクター 1:</label>
+            <select id="narration_voice_1" name="narration_voice_1">
+                {% for voice in voices %}
+                <option value="{{ voice.name }}">{{ voice.name }}</option>
+                {% endfor %}
+            </select>
+            <br>
+        </div>
         <p><input type="submit" value="作成"></p>
     </form>
     <a href="{{ url_for('index') }}">HOME</a>
