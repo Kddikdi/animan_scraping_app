@@ -10,7 +10,7 @@ import webbrowser
 import csv
 
 
-def main(url):
+def main(url,title_voice, narration_voices):
     # 対象ページを別タブで開く
     webbrowser.open(url, new=1)
     # ChromeDriverのサービスを設定
@@ -28,7 +28,7 @@ def main(url):
     # 台本抽出
     script, csv_title = make_script(soup)
     # 音声割り当て
-    name = make_talk_name(script)
+    name = make_talk_name(script, title_voice, narration_voices)
     # 長さチェック
     # name_count = len(name)
     # script_count = len(script)
@@ -74,14 +74,14 @@ def make_script(soup):
     return reslist_list, csv_title
 
 
-def make_talk_name(script):
+def make_talk_name(script, title_voice, narration_voices):
     name_list = []
     count = len(script)
     # 読み上げ音声を手動設定
-    name_candidate = ["男1", "男2", "女1", "女2", "男3", "女3"]
+    name_candidate = narration_voices
     candidate_count = len(name_candidate)
     # タイトル読み上げは固定
-    call_title_name = "男1"
+    call_title_name = title_voice
     name_list.append(call_title_name)
 
     for i in range(count-1):

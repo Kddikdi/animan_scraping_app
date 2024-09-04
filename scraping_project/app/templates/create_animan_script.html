@@ -6,24 +6,22 @@
     <title>台本作成ページ</title>
     <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='styles.css') }}">
     <script>
-        // JavaScriptで人数に応じてキャラクター選択欄を追加する
-        function updateCharacterSelection() {
-            const count = document.getElementById('narration_count').value;
+        function generateFields() {
             const container = document.getElementById('character-selection-container');
-            container.innerHTML = ''; // 既存の選択肢をクリア
+            container.innerHTML = '';
 
-            for (let i = 0; i < count; i++) {
+            const numParticipants = document.getElementById('num_participants').value;
+
+            for (let i = 0; i < numParticipants; i++) {
                 const label = document.createElement('label');
-                label.textContent = キャラクター ${i + 1};
-                const select = document.createElement('select');
-                select.name = narration_voice_${i+1};
+                label.textContent = `キャラクター ${i + 1}:`;
 
-                {% for voice in voices %}
-                const option = document.createElement('option');
-                option.value = "{{ voice.name }}";
-                option.textContent = "{{ voice.name }}";
-                select.appendChild(option);
-                {% endfor %}
+                const select = document.createElement('select');
+                select.name = 'narration_voices[]';
+
+                // 既に生成されたオプションをコピー
+                const options = document.getElementById('default-options').cloneNode(true);
+                select.innerHTML = options.innerHTML;
 
                 container.appendChild(label);
                 container.appendChild(select);
@@ -38,6 +36,7 @@
         <!-- 抽出元URLの入力 -->
         <label for="URL">抽出元URL:</label>
         <input type="text" id="url" name="url" placeholder="URLを入力" required>
+
         <!-- タイトルコール音声選択 -->
         <label for="title_voice">タイトルコール音声:</label>
         <select id="title_voice" name="title_voice">
@@ -45,26 +44,28 @@
             <option value="{{ voice.name }}" {% if voice.name == '四国めたん' %}selected{% endif %}>{{ voice.name }}</option>
             {% endfor %}
         </select>
-        <!-- 読み上げ人数選択 -->
-        <label for="narration_count">読み上げ人数:</label>
-        <input type="number" id="narration_count" name="narration_count" value="1" min="1" max="10" onchange="updateCharacterSelection()">
+
+        <!-- 参加音声人数の入力 -->
+        <label for="num_participants">参加音声人数:</label>
+        <input type="number" id="num_participants" name="num_participants" min="1" max="10" required>
+        <button type="button" onclick="generateFields()">決定</button>
 
         <!-- 読み上げ音声選択 -->
         <label for="narration_voice">読み上げ音声のキャラクター:</label>
         <!-- キャラクター選択を表示するためのコンテナ -->
         <div id="character-selection-container">
-            <!-- 初期状態で1人分のキャラクター選択を表示 -->
-            <label for="narration_voice_1">キャラクター 1:</label>
-            <select id="narration_voice_1" name="narration_voice_1">
-                {% for voice in voices %}
-                <option value="{{ voice.name }}">{{ voice.name }}</option>
-                {% endfor %}
-            </select>
-            <br>
+            <!-- 初期状態ではキャラクター選択フィールドはなし -->
         </div>
+
+        <!-- ここで全てのオプションを事前に定義しておく -->
+        <select id="default-options" style="display:none;">
+            {% for voice in voices %}
+            <option value="{{ voice.name }}">{{ voice.name }}</option>
+            {% endfor %}
+        </select>
+
         <p><input type="submit" value="作成"></p>
     </form>
     <a href="{{ url_for('index') }}">HOME</a>
-
 </body>
 </html>

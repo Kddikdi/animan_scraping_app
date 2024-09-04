@@ -48,7 +48,9 @@ def register_routes(app):
         if request.method == 'POST':
             try:
                 url = request.form['url']
-                main(url)  # URLを渡してスクリプトを実行
+                title_voice = request.form.get('title_voice')
+                narration_voices = request.form.getlist('narration_voices[]')
+                main(url, title_voice, narration_voices)  # URLを渡してスクリプトを実行
                 session['message'] = '台本作成が完了しました'
                 return redirect(url_for('success'))
             except Exception as e:
