@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>動画作成ページ</title>
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <h1>動画作成</h1>
+    <form action="{{ url_for('create_animan_video_page') }}" method="POST" enctype="multipart/form-data">
+        <!-- 台本CSVの選択 -->
+        <label for="csv_name">台本ファイル:</label>
+        <select id="csv_name" name="csv_name" required>
+            {% for script in scripts %}
+            <option value="{{ script }}">{{ script }}</option>
+            {% endfor %}
+        </select>
+
+        <label for="background">背景画像（任意）:</label>
+        <input type="file" id="background" name="background" accept="image/*"><br>
+
+        <label for="bgm">BGM（任意）:</label>
+        <input type="file" id="bgm" name="bgm" accept="audio/*"><br>
+
+        <label for="speed">読み上げ速度:</label>
+        <input type="text" id="speed" name="speed" value="1.2">
+
+        <label for="voicevox_url">VOICEVOXエンジンURL:</label>
+        <input type="text" id="voicevox_url" name="voicevox_url" value="http://127.0.0.1:50021">
+
+        <label><input type="checkbox" name="silent" value="1"> 音声なしで作成（レイアウト確認用）</label>
+
+        <p>※VOICEVOXを起動してから実行してください。作成には数分かかります。</p>
+        <p><input type="submit" value="作成"></p>
+    </form>
+    <a href="{{ url_for('index') }}">HOME</a>
+</body>
+</html>

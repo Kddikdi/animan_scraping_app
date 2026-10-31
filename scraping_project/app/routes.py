@@ -2,6 +2,10 @@ from flask import render_template, request, redirect, url_for, session, flash
 from .contorollers.create_animan_script import main
 from .contorollers.get_animan_url import main as get_animan_main
 from .contorollers.get_onsei_index import main as get_onsei_index_main
+from .contorollers import create_animan_video
+import os
+import shutil
+import tempfile
 from app.models import Voice
 
 
@@ -19,8 +23,7 @@ def register_routes(app):
                 return redirect(url_for('get_onsei_index'))
             except Exception as e:
                 flash(f'エラーが発生しました: {str(e)}')
-        else:
-            voices = Voice.query.all()
+        voices = Voice.query.all()
         return render_template('get_onsei_index.html', voices=voices)
 
     @app.route('/get_animan_url', methods=['GET', 'POST'])
@@ -58,6 +61,36 @@ def register_routes(app):
                 return redirect(url_for('error'))
         voices = Voice.query.all()
         return render_template('create_animan_script.html', voices=voices)
+
+    @app.route('/create_animan_video', methods=['GET', 'POST'])
+    def create_animan_video_page():
+        if request.method == 'POST':
+            work_dir = tempfile.mkdtemp(prefix='animan_upload_')
+            try:
+                # 背景画像・BGMは一時フォルダに保存して渡す
+                uploads = {}
+                for key in ('background', 'bgm'):
+                    file = request.files.get(key)
+                    if file and file.filename:
+                        path = os.path.join(work_dir, key + os.path.splitext(file.filename)[1])
+                        file.save(path)
+                        uploads[key] = path
+                output_path = create_animan_video.main(
+                    request.form['csv_name'],
+                    background_path=uploads.get('background'),
+                    bgm_path=uploads.get('bgm'),
+                    voicevox_url=request.form.get('voicevox_url') or 'http://127.0.0.1:50021',
+                    speed=float(request.form.get('speed') or 1.2),
+                    silent=bool(request.form.get('silent')),
+                )
+                session['message'] = f'動画作成が完了しました: {output_path}'
+                return redirect(url_for('success'))
+            except Exception as e:
+                flash(f'エラーが発生しました: {str(e)}')
+                return redirect(url_for('error'))
+            finally:
+                shutil.rmtree(work_dir, ignore_errors=True)
+        return render_template('create_animan_video.html', scripts=create_animan_video.list_scripts())
 
     @app.route('/success')
     def success():
