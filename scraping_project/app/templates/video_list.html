@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>作成した動画</title>
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <h1>作成した動画</h1>
+    {% with messages = get_flashed_messages() %}
+        {% for message in messages %}<p>{{ message }}</p>{% endfor %}
+    {% endwith %}
+    {% for video in videos %}
+    <h2>{{ video }}</h2>
+    <video src="{{ url_for('video_file', filename=video) }}" controls playsinline preload="metadata" style="width:100%;max-width:640px;"></video>
+    <p><a href="{{ url_for('video_file', filename=video) }}" download>ダウンロード</a></p>
+    {% else %}
+    <p>まだ動画がありません。</p>
+    {% endfor %}
+    <p><a href="{{ url_for('index') }}">HOME</a></p>
+</body>
+</html>

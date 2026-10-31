@@ -1,4 +1,4 @@
-from flask import render_template, request, redirect, url_for, session, flash
+from flask import render_template, request, redirect, url_for, session, flash, send_from_directory
 from .contorollers.create_animan_script import main
 from .contorollers.get_animan_url import main as get_animan_main
 from .contorollers.get_onsei_index import main as get_onsei_index_main
@@ -83,14 +83,28 @@ def register_routes(app):
                     speed=float(request.form.get('speed') or 1.2),
                     silent=bool(request.form.get('silent')),
                 )
-                session['message'] = f'動画作成が完了しました: {output_path}'
-                return redirect(url_for('success'))
+                flash(f'動画作成が完了しました: {os.path.basename(output_path)}')
+                return redirect(url_for('video_list'))
             except Exception as e:
                 flash(f'エラーが発生しました: {str(e)}')
                 return redirect(url_for('error'))
             finally:
                 shutil.rmtree(work_dir, ignore_errors=True)
         return render_template('create_animan_video.html', scripts=create_animan_video.list_scripts())
+
+    @app.route('/videos')
+    def video_list():
+        video_dir = os.path.abspath(create_animan_video.VIDEO_DIR)
+        videos = []
+        if os.path.isdir(video_dir):
+            names = [f for f in os.listdir(video_dir) if f.endswith('.mp4')]
+            videos = sorted(names, key=lambda f: os.path.getmtime(os.path.join(video_dir, f)), reverse=True)
+        return render_template('video_list.html', videos=videos)
+
+    @app.route('/videos/<path:filename>')
+    def video_file(filename):
+        # send_from_directoryはディレクトリ外へのパス指定を弾く
+        return send_from_directory(os.path.abspath(create_animan_video.VIDEO_DIR), filename)
 
     @app.route('/success')
     def success():
