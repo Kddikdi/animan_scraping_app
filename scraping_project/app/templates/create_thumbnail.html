@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>サムネ作成ページ</title>
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <h1>サムネ作成</h1>
+    {% with messages = get_flashed_messages() %}
+        {% for message in messages %}<p>{{ message }}</p>{% endfor %}
+    {% endwith %}
+
+    {% if not csv_name %}
+    <p>反応集の台本がありません。先に<a href="{{ url_for('create_reaction_script_page') }}">反応集台本作成</a>で台本を作成してください。</p>
+    {% else %}
+    <!-- 台本の切り替え -->
+    <form action="{{ url_for('create_thumbnail_page') }}" method="GET">
+        <label for="csv">台本ファイル:</label>
+        <select id="csv" name="csv" onchange="this.form.submit()">
+            {% for script in scripts %}
+            <option value="{{ script }}" {% if script == csv_name %}selected{% endif %}>{{ script }}</option>
+            {% endfor %}
+        </select>
+    </form>
+
+    {% if thumbnail %}
+    <p><img src="{{ url_for('video_file', filename=thumbnail) }}?v={{ version }}" alt="サムネイル" style="width:100%;max-width:640px;"></p>
+    <p><a href="{{ url_for('video_file', filename=thumbnail) }}" download>ダウンロード</a></p>
+    {% endif %}
+
+    <form action="{{ url_for('create_thumbnail_page') }}" method="POST" enctype="multipart/form-data">
+        <input type="hidden" name="csv" value="{{ csv_name }}">
+
+        <label for="template">テンプレート:</label>
+        <select id="template" name="template">
+            {% for key, template in templates.items() %}
+            <option value="{{ key }}" {% if key == settings.template %}selected{% endif %}>{{ template.label }}</option>
+            {% endfor %}
+        </select>
+
+        <label for="bubble0">左上の吹き出し:</label>
+        <textarea id="bubble0" name="bubble0" rows="2">{{ settings.bubbles[0] }}</textarea>
+        <label for="bubble1">右上の吹き出し:</label>
+        <textarea id="bubble1" name="bubble1" rows="2">{{ settings.bubbles[1] }}</textarea>
+        <label for="bubble2">左下の吹き出し:</label>
+        <textarea id="bubble2" name="bubble2" rows="2">{{ settings.bubbles[2] }}</textarea>
+        <label for="bubble3">右下の吹き出し:</label>
+        <textarea id="bubble3" name="bubble3" rows="2">{{ settings.bubbles[3] }}</textarea>
+        <p>※改行で行を指定できます。空欄の吹き出しは表示しません。</p>
+
+        <label for="bottom">下の文字:</label>
+        <input type="text" id="bottom" name="bottom" value="{{ settings.bottom }}">
+
+        <label for="image">中央の画像:</label>
+        <select id="image" name="image">
+            <option value="">なし</option>
+            {% for panel in panels %}
+            <option value="{{ panel }}" {% if panel == settings.image %}selected{% endif %}>{{ panel }}</option>
+            {% endfor %}
+        </select>
+
+        <label for="upload">画像をアップロード（任意）:</label>
+        <input type="file" id="upload" name="upload" accept="image/*"><br>
+
+        <label for="image_scale">画像の倍率:</label>
+        <input type="text" id="image_scale" name="image_scale" value="{{ settings.image_scale }}">
+
+        <label for="watermark">チャンネル名（右下に表示・任意）:</label>
+        <input type="text" id="watermark" name="watermark" value="{{ settings.watermark }}">
+
+        <p>※創作イラストは規約で転載禁止です。公開前に画像を確認してください。</p>
+        <p><input type="submit" value="作成"></p>
+    </form>
+    {% endif %}
+    <a href="{{ url_for('index') }}">HOME</a>
+</body>
+</html>

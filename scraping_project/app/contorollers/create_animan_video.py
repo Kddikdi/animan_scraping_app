@@ -24,6 +24,8 @@ import wave
 import requests
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
+from . import thumbnail_template
+
 # 出力先・入力元
 SCRIPT_DIR = "台本ファイル"
 VIDEO_DIR = "出力動画"
@@ -55,6 +57,9 @@ SUBTITLE_COLORS = [
     ((190, 50, 230), (255, 255, 255)),
     ((255, 255, 255), (0, 0, 0)),
 ]
+
+# YouTubeのサムネイルの容量上限
+MAX_THUMBNAIL_BYTES = 2 * 1024 * 1024
 
 # 音声設定
 PAUSE_SEC = 0.4  # セリフ間の無音
@@ -143,9 +148,11 @@ def main(csv_name, background_path=None, bgm_path=None, voicevox_url="http://127
         output_path = base_name + ".mp4"
         encode_video(ffmpeg, list_path, audio_path, bgm_path, bgm_volume, output_path)
         write_srt(base_name + ".srt", segments)
-        render_thumbnail(title, background, font_path).save(base_name + "_thumbnail.png")
         if meta:
+            save_thumbnail(csv_path)
             write_description(base_name + "_説明文.txt", meta, list(colors))
+        else:
+            render_thumbnail(title, background, font_path).save(base_name + "_thumbnail.png")
     finally:
         shutil.rmtree(work_dir, ignore_errors=True)
 
@@ -179,6 +186,11 @@ def read_meta(csv_path):
         return None
     with open(meta_path, encoding="utf-8") as f:
         return json.load(f)
+
+
+def write_meta(csv_path, meta):
+    with open(os.path.splitext(csv_path)[0] + ".meta.json", "w", encoding="utf-8") as f:
+        json.dump(meta, f, ensure_ascii=False, indent=2)
 
 
 def make_pages(rows, max_chars=MAX_CHARS_PER_PAGE):
@@ -495,6 +507,60 @@ def find_ffmpeg():
     if not path:
         raise RuntimeError("ffmpegが見つかりません。インストールしてPATHを通すか、環境変数FFMPEG_PATHを設定してください")
     return path
+
+
+def list_reaction_scripts():
+    """反応集の台本（設定ファイルがあるもの）の一覧"""
+    return [f for f in list_scripts() if read_meta(os.path.join(SCRIPT_DIR, f))]
+
+
+def list_panels(title):
+    """動画のコマ画像フォルダの画像一覧（コマ画像フォルダからの相対パス）"""
+    folder = safe_file_name(title)
+    if not os.path.isdir(os.path.join(PANEL_DIR, folder)):
+        return []
+    return [f"{folder}/{name}" for name in sorted(os.listdir(os.path.join(PANEL_DIR, folder)))]
+
+
+def thumbnail_settings(csv_path):
+    """保存済みのサムネイル設定を返す。無ければ台本から初期値を作る"""
+    meta = read_meta(csv_path)
+    return meta.get("thumbnail") or thumbnail_template.default_settings(read_script(csv_path), meta)
+
+
+def add_thumbnail_image(csv_path, file):
+    """アップロードされた画像をコマ画像フォルダに保存し、相対パスを返す"""
+    folder = safe_file_name(read_meta(csv_path)["title"])
+    os.makedirs(os.path.join(PANEL_DIR, folder), exist_ok=True)
+    Image.open(file).convert("RGB").save(os.path.join(PANEL_DIR, folder, "thumbnail_upload.jpg"), quality=95)
+    return f"{folder}/thumbnail_upload.jpg"
+
+
+def save_thumbnail(csv_path, settings=None):
+    """サムネイルを出力し、ファイル名を返す。settingsを渡すと台本の設定として保存する"""
+    meta = read_meta(csv_path)
+    if settings:
+        meta["thumbnail"] = settings
+        write_meta(csv_path, meta)
+    settings = thumbnail_settings(csv_path)
+
+    panel_path = None
+    if settings["image"]:
+        path = os.path.join(PANEL_DIR, settings["image"])
+        if os.path.isfile(path):
+            panel_path = path
+        else:
+            print(f"コマ画像を読み込めません: {path}")
+    image = thumbnail_template.render_thumbnail(settings, panel_path)
+
+    os.makedirs(VIDEO_DIR, exist_ok=True)
+    name = safe_file_name(meta["title"]) + "_thumbnail.jpg"
+    path = os.path.join(VIDEO_DIR, name)
+    for quality in (95, 90, 85, 80, 70):
+        image.save(path, quality=quality)
+        if os.path.getsize(path) <= MAX_THUMBNAIL_BYTES:
+            break
+    return name
 
 
 def write_concat_list(list_path, segments):

@@ -4,6 +4,7 @@ from .contorollers.get_animan_url import main as get_animan_main
 from .contorollers.get_onsei_index import main as get_onsei_index_main
 from .contorollers import create_animan_video
 from .contorollers import create_reaction_script
+from .contorollers import thumbnail_template
 import os
 import shutil
 import tempfile
@@ -87,6 +88,49 @@ def register_routes(app):
         return render_template('create_reaction_script.html', voices=voices,
                                saved_threads=create_reaction_script.list_saved_threads())
 
+    @app.route('/create_thumbnail', methods=['GET', 'POST'])
+    def create_thumbnail_page():
+        scripts = create_animan_video.list_reaction_scripts()
+        csv_name = request.values.get('csv')
+        if csv_name not in scripts:
+            csv_name = scripts[0] if scripts else None
+        if csv_name is None:
+            return render_template('create_thumbnail.html', csv_name=None, scripts=[])
+        csv_path = os.path.join(create_animan_video.SCRIPT_DIR, csv_name)
+        title = create_animan_video.read_meta(csv_path)['title']
+        panels = create_animan_video.list_panels(title)
+
+        if request.method == 'POST':
+            try:
+                image = request.form.get('image', '')
+                upload = request.files.get('upload')
+                if upload and upload.filename:
+                    image = create_animan_video.add_thumbnail_image(csv_path, upload)
+                elif image not in panels:
+                    image = ''
+                create_animan_video.save_thumbnail(csv_path, {
+                    'template': request.form.get('template'),
+                    'bubbles': [request.form.get(f'bubble{i}', '') for i in range(4)],
+                    'bottom': request.form.get('bottom', ''),
+                    'image': image,
+                    'image_scale': float(request.form.get('image_scale') or 1),
+                    'watermark': request.form.get('watermark', ''),
+                })
+                flash('サムネイルを作成しました')
+                return redirect(url_for('create_thumbnail_page', csv=csv_name))
+            except Exception as e:
+                flash(f'エラーが発生しました: {str(e)}')
+                return redirect(url_for('error'))
+
+        thumbnail = create_animan_video.safe_file_name(title) + '_thumbnail.jpg'
+        thumbnail_path = os.path.join(create_animan_video.VIDEO_DIR, thumbnail)
+        exists = os.path.isfile(thumbnail_path)
+        return render_template('create_thumbnail.html', csv_name=csv_name, scripts=scripts, panels=panels,
+                               settings=create_animan_video.thumbnail_settings(csv_path),
+                               templates=thumbnail_template.TEMPLATES,
+                               thumbnail=thumbnail if exists else None,
+                               version=int(os.path.getmtime(thumbnail_path)) if exists else 0)
+
     @app.route('/create_animan_video', methods=['GET', 'POST'])
     def create_animan_video_page():
         if request.method == 'POST':
@@ -122,11 +166,13 @@ def register_routes(app):
         video_dir = os.path.abspath(create_animan_video.VIDEO_DIR)
         videos = []
         descriptions = []
+        thumbnails = []
         if os.path.isdir(video_dir):
             names = [f for f in os.listdir(video_dir) if f.endswith('.mp4')]
             videos = sorted(names, key=lambda f: os.path.getmtime(os.path.join(video_dir, f)), reverse=True)
             descriptions = [f for f in os.listdir(video_dir) if f.endswith('_説明文.txt')]
-        return render_template('video_list.html', videos=videos, descriptions=descriptions)
+            thumbnails = [f for f in os.listdir(video_dir) if f.endswith('_thumbnail.jpg')]
+        return render_template('video_list.html', videos=videos, descriptions=descriptions, thumbnails=thumbnails)
 
     @app.route('/videos/<path:filename>')
     def video_file(filename):

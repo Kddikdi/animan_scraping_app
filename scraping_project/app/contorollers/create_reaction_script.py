@@ -15,7 +15,6 @@ URL取得が拒否された場合は回避せず、ブラウザで保存したHT
     ・YouTube: 説明文の先頭に元スレURLを全て記載、動画内の先頭に掲示板名を記載
 """
 import csv
-import json
 import os
 import re
 import shutil
@@ -27,7 +26,7 @@ import requests
 from bs4 import BeautifulSoup, Comment
 from PIL import Image
 
-from .create_animan_video import PANEL_DIR, SCRIPT_DIR, safe_file_name
+from .create_animan_video import PANEL_DIR, SCRIPT_DIR, safe_file_name, write_meta
 
 SAVED_DIR = "保存スレ"
 
@@ -83,6 +82,7 @@ def main(urls, saved_files, theme, copyright_text, hashtags, title_voice, narrat
     rows = make_rows(theme, topics, panels, title_voice, narration_voices)
     meta = {
         "title": title,
+        "theme": theme,
         "copyright": copyright_text.strip(),
         "hashtags": hashtags.strip(),
         "source_urls": [thread["url"] for thread in threads],
@@ -328,6 +328,5 @@ def output_script(title, rows, meta):
     csv_path = os.path.join(SCRIPT_DIR, csv_name)
     with open(csv_path, "w", encoding="utf-8-sig", newline="") as f:
         csv.writer(f).writerows(rows)
-    with open(os.path.splitext(csv_path)[0] + ".meta.json", "w", encoding="utf-8") as f:
-        json.dump(meta, f, ensure_ascii=False, indent=2)
+    write_meta(csv_path, meta)
     return csv_name
