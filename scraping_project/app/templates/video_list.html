@@ -15,6 +15,9 @@
     <h2>{{ video }}</h2>
     <video src="{{ url_for('video_file', filename=video) }}" controls playsinline preload="metadata" style="width:100%;max-width:640px;"></video>
     <p><a href="{{ url_for('video_file', filename=video) }}" download>ダウンロード</a></p>
+    {% if video[:-4] + '_説明文.txt' in descriptions %}
+    <p><a href="{{ url_for('video_file', filename=video[:-4] + '_説明文.txt') }}">YouTube説明文</a></p>
+    {% endif %}
     {% else %}
     <p>まだ動画がありません。</p>
     {% endfor %}

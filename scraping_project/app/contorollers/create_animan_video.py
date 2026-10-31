@@ -8,9 +8,13 @@
 
 VOICEVOXエンジン(アプリ)を起動しておく必要がある（既定: http://127.0.0.1:50021）
 silent=True の場合は音声合成をせず、文字数から表示時間を推定する（レイアウト確認用）
+
+台本に設定ファイル(.meta.json)があれば反応集レイアウト（中央にコマ、下部に字幕）で作成し、
+元スレURLを先頭に書いた説明文も出力する（create_reaction_scriptで作成）
 """
 import csv
 import io
+import json
 import os
 import shutil
 import subprocess
@@ -23,6 +27,8 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 # 出力先・入力元
 SCRIPT_DIR = "台本ファイル"
 VIDEO_DIR = "出力動画"
+PANEL_DIR = "コマ画像"
+BOARD_NAME = "あにまん掲示板"
 
 # 画面設定
 WIDTH, HEIGHT = 1920, 1080
@@ -35,6 +41,20 @@ MAX_FONT_SIZE = 72
 MIN_FONT_SIZE = 44
 # 1画面に収まらない長文はこの文字数を目安に分割する
 MAX_CHARS_PER_PAGE = 140
+
+# 反応集レイアウト
+SUBTITLE_BAND_TOP = 790
+SUBTITLE_MARGIN_X = 80
+MAX_SUBTITLE_FONT_SIZE = 84
+MAX_SUBTITLE_CHARS = 80
+# レスごとに切り替える字幕の色（文字色, 縁取り色）
+SUBTITLE_COLORS = [
+    ((255, 235, 0), (0, 0, 0)),
+    ((235, 30, 40), (255, 255, 255)),
+    ((40, 110, 245), (255, 255, 255)),
+    ((190, 50, 230), (255, 255, 255)),
+    ((255, 255, 255), (0, 0, 0)),
+]
 
 # 音声設定
 PAUSE_SEC = 0.4  # セリフ間の無音
@@ -76,14 +96,15 @@ def main(csv_name, background_path=None, bgm_path=None, voicevox_url="http://127
     rows = read_script(csv_path)
     if not rows:
         raise ValueError("台本が空です")
-    title = rows[0][1]
+    meta = read_meta(csv_path)
+    title = meta["title"] if meta else rows[0][1]
 
     ffmpeg = find_ffmpeg()
     font_path = find_font()
     background = make_background(background_path)
 
     # 長文を分割して1画面ごとのページにする
-    pages = make_pages(rows)
+    pages = make_pages(rows, MAX_SUBTITLE_CHARS if meta else MAX_CHARS_PER_PAGE)
     colors = assign_colors(pages)
 
     tts = None if silent else VoicevoxClient(voicevox_url, speed)
@@ -105,7 +126,10 @@ def main(csv_name, background_path=None, bgm_path=None, voicevox_url="http://127
             duration = len(pcm) / 2 / SAMPLE_RATE
 
             # 画像
-            image = render_page(page, title, background, font_path, colors)
+            if meta:
+                image = render_reaction_page(page, background, font_path, meta.get("copyright", ""))
+            else:
+                image = render_page(page, title, background, font_path, colors)
             image_path = os.path.join(work_dir, f"{i:04d}.png")
             image.save(image_path)
             segments.append((image_path, duration, page["text"]))
@@ -120,6 +144,8 @@ def main(csv_name, background_path=None, bgm_path=None, voicevox_url="http://127
         encode_video(ffmpeg, list_path, audio_path, bgm_path, bgm_volume, output_path)
         write_srt(base_name + ".srt", segments)
         render_thumbnail(title, background, font_path).save(base_name + "_thumbnail.png")
+        if meta:
+            write_description(base_name + "_説明文.txt", meta, list(colors))
     finally:
         shutil.rmtree(work_dir, ignore_errors=True)
 
@@ -141,26 +167,31 @@ def read_script(csv_path):
         for row in csv.reader(f):
             if len(row) < 2 or not row[1].strip():
                 continue
-            rows.append((row[0].strip(), row[1].strip()))
+            # 3列目以降（コマ画像, 話題）は反応集の台本のみ
+            panel, topic = (row + ["", ""])[2:4]
+            rows.append((row[0].strip(), row[1].strip(), panel.strip(), topic.strip()))
     return rows
 
 
-def make_pages(rows):
+def read_meta(csv_path):
+    meta_path = os.path.splitext(csv_path)[0] + ".meta.json"
+    if not os.path.isfile(meta_path):
+        return None
+    with open(meta_path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def make_pages(rows, max_chars=MAX_CHARS_PER_PAGE):
     """台本の各行を画面単位に変換する（1行目はタイトルコール）"""
     pages = []
-    for index, (voice, text) in enumerate(rows):
+    for index, (voice, text, panel, topic) in enumerate(rows):
+        common = {"voice": voice, "res_no": index, "panel": panel, "topic": topic}
         if index == 0:
-            pages.append({"kind": "title", "voice": voice, "text": text, "res_no": 0})
+            pages.append({"kind": "title", "text": text, **common})
             continue
-        chunks = split_text(text, MAX_CHARS_PER_PAGE)
+        chunks = split_text(text, max_chars)
         for chunk_index, chunk in enumerate(chunks):
-            pages.append({
-                "kind": "res",
-                "voice": voice,
-                "text": chunk,
-                "res_no": index,
-                "continued": chunk_index > 0,
-            })
+            pages.append({"kind": "res", "text": chunk, "continued": chunk_index > 0, **common})
     return pages
 
 
@@ -362,6 +393,66 @@ def render_page(page, title, background, font_path, colors):
     return image
 
 
+def load_panel(panel):
+    """コマ画像を読み込む。未指定・読み込み不可ならNone"""
+    if not panel:
+        return None
+    path = panel if os.path.isabs(panel) else os.path.join(PANEL_DIR, panel)
+    try:
+        return Image.open(path).convert("RGB")
+    except OSError:
+        print(f"コマ画像を読み込めません: {path}")
+        return None
+
+
+def draw_panel(image, draw, page, font_path):
+    panel = load_panel(page["panel"])
+    if panel:
+        # 字幕帯より上に収まるように拡大縮小して中央に配置
+        scale = min((WIDTH - 200) / panel.width, (SUBTITLE_BAND_TOP - 40) / panel.height)
+        panel = panel.resize((int(panel.width * scale), int(panel.height * scale)), Image.LANCZOS)
+        image.paste(panel, ((WIDTH - panel.width) // 2, (SUBTITLE_BAND_TOP - panel.height) // 2))
+    elif page["topic"]:
+        # コマが無いうちは話題名を表示する
+        font, lines, line_height = fit_text(draw, page["topic"], font_path, WIDTH - 400, 400, 120)
+        y = (SUBTITLE_BAND_TOP - line_height * len(lines)) // 2 + line_height // 2
+        for line in lines:
+            draw.text((WIDTH // 2, y), line, font=font, fill="white", anchor="mm",
+                      stroke_width=6, stroke_fill="black")
+            y += line_height
+
+
+def render_reaction_page(page, background, font_path, copyright_text):
+    image = background.copy()
+    draw = ImageDraw.Draw(image)
+    draw_panel(image, draw, page, font_path)
+
+    band = Image.new("RGBA", (WIDTH, HEIGHT - SUBTITLE_BAND_TOP), (0, 0, 0, 215))
+    image.paste(band, (0, SUBTITLE_BAND_TOP), band)
+
+    fill, stroke = SUBTITLE_COLORS[page["res_no"] % len(SUBTITLE_COLORS)]
+    font, lines, line_height = fit_text(draw, page["text"], font_path, WIDTH - SUBTITLE_MARGIN_X * 2,
+                                        HEIGHT - SUBTITLE_BAND_TOP - 50, MAX_SUBTITLE_FONT_SIZE)
+    y = (SUBTITLE_BAND_TOP + HEIGHT - line_height * len(lines)) // 2 + line_height // 2
+    for line in lines:
+        draw.text((WIDTH // 2, y), line, font=font, fill=fill, anchor="mm", stroke_width=5, stroke_fill=stroke)
+        y += line_height
+
+    # 規約により動画内の先頭に掲示板名を記載する
+    if page["kind"] == "title":
+        source_font = ImageFont.truetype(font_path, 56)
+        source_text = f"引用元：『{BOARD_NAME}』"
+        box = draw.textbbox((24, 16), source_text, font=source_font)
+        draw.rectangle([box[0] - 12, box[1] - 10, box[2] + 12, box[3] + 10], fill=(0, 0, 0))
+        draw.text((24, 16), source_text, font=source_font, fill="white")
+
+    if copyright_text:
+        copyright_font = ImageFont.truetype(font_path, 32)
+        draw.text((WIDTH - 24, 16), copyright_text, font=copyright_font, fill="white", anchor="ra",
+                  stroke_width=3, stroke_fill="black")
+    return image
+
+
 def render_title_card(title, background, font_path):
     image = background.copy()
     draw = ImageDraw.Draw(image)
@@ -442,6 +533,23 @@ def write_srt(path, segments):
             end = start + duration - PAUSE_SEC
             f.write(f"{index}\n{timestamp(start)} --> {timestamp(end)}\n{text}\n\n")
             start += duration
+
+
+def write_description(path, meta, voices):
+    """YouTube説明文を出力する。規約により元スレURLは必ず先頭に全て記載する"""
+    lines = list(meta["source_urls"])
+    lines += ["", "チャンネル登録・高評価よろしくお願いします！", "※この動画はネタバレを含みます", "",
+              "【引用元】", BOARD_NAME]
+    if meta.get("copyright"):
+        lines += ["", "【動画内の引用作品】", meta["copyright"]]
+    lines += ["", "【著作権に関しまして】",
+              "動画で掲載している画像などの著作権や肖像権等は全てその権利所有者様に帰属致します。",
+              "動画の内容に問題がある場合は、各権利所有者様本人からご連絡頂けましたら幸いです。"]
+    lines += ["", "【音声】"] + [f"VOICEVOX:{voice}" for voice in voices]
+    if meta.get("hashtags"):
+        lines += ["", meta["hashtags"]]
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
 
 
 def safe_file_name(name):

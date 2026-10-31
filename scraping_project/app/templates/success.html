@@ -8,6 +8,9 @@
 </head>
 <body>
     <h1>作成完了しました</h1>
+    {% with messages = get_flashed_messages() %}
+        {% for message in messages %}<p>{{ message }}</p>{% endfor %}
+    {% endwith %}
     <p><a href="{{ url_for('index') }}">HOME</a></p>
 
     <script>

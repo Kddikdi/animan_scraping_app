@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>反応集台本作成ページ</title>
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='styles.css') }}">
+    <script>
+        function generateFields() {
+            const container = document.getElementById('character-selection-container');
+            container.innerHTML = '';
+
+            const numParticipants = document.getElementById('num_participants').value;
+
+            for (let i = 0; i < numParticipants; i++) {
+                const label = document.createElement('label');
+                label.textContent = `キャラクター ${i + 1}:`;
+
+                const select = document.createElement('select');
+                select.name = 'narration_voices[]';
+
+                // 既に生成されたオプションをコピー
+                const options = document.getElementById('default-options').cloneNode(true);
+                select.innerHTML = options.innerHTML;
+
+                container.appendChild(label);
+                container.appendChild(select);
+                container.appendChild(document.createElement('br'));
+            }
+        }
+    </script>
+</head>
+<body>
+    <h1>反応集台本作成</h1>
+    <form action="{{ url_for('create_reaction_script_page') }}" method="POST">
+        <!-- 感想スレの指定 -->
+        <label for="urls">感想スレURL（1行に1スレ）:</label>
+        <textarea id="urls" name="urls" rows="3" placeholder="https://bbs.animanch.com/board/..."></textarea>
+
+        <label for="saved_files">保存したスレ（URL取得が拒否される場合）:</label>
+        <select id="saved_files" name="saved_files" multiple>
+            {% for thread in saved_threads %}
+            <option value="{{ thread }}">{{ thread }}</option>
+            {% endfor %}
+        </select>
+        <p>※ブラウザでスレを開き、「ウェブページ、完全」で scraping_project/保存スレ に保存すると選択できます。貼られた画像も読み込みます。</p>
+
+        <label for="theme">動画のテーマ（例: シャンフロ最新285話）:</label>
+        <input type="text" id="theme" name="theme" placeholder="空欄ならスレタイ">
+
+        <label for="copyright">権利表記（画面右上・説明文に表示）:</label>
+        <input type="text" id="copyright" name="copyright" placeholder="作品名/©作者/出版社">
+
+        <label for="hashtags">ハッシュタグ:</label>
+        <input type="text" id="hashtags" name="hashtags" placeholder="#反応集">
+
+        <!-- タイトルコール音声選択 -->
+        <label for="title_voice">冒頭・締めの音声:</label>
+        <select id="title_voice" name="title_voice">
+            {% for voice in voices %}
+            <option value="{{ voice.name }}" {% if voice.name == '四国めたん' %}selected{% endif %}>{{ voice.name }}</option>
+            {% endfor %}
+        </select>
+
+        <!-- 参加音声人数の入力 -->
+        <label for="num_participants">参加音声人数:</label>
+        <input type="number" id="num_participants" name="num_participants" min="1" max="10" required>
+        <button type="button" onclick="generateFields()">決定</button>
+
+        <label>読み上げ音声のキャラクター:</label>
+        <div id="character-selection-container"></div>
+
+        <select id="default-options" style="display:none;">
+            {% for voice in voices %}
+            <option value="{{ voice.name }}">{{ voice.name }}</option>
+            {% endfor %}
+        </select>
+
+        <p>※あにまん掲示板の規約により、使用できるのは過去ログのスレのみです。創作イラストは転載禁止のため、収集したコマは公開前に確認してください。</p>
+        <p>※動画の先頭の掲示板名と、説明文の先頭の元スレURLは自動で入ります。</p>
+        <p>※台本のコマ画像列は後から書き換えられます（コマ画像フォルダからの相対パス）。空欄なら話題名を表示します。</p>
+        <p><input type="submit" value="作成"></p>
+    </form>
+    <a href="{{ url_for('index') }}">HOME</a>
+</body>
+</html>

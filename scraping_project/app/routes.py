@@ -3,6 +3,7 @@ from .contorollers.create_animan_script import main
 from .contorollers.get_animan_url import main as get_animan_main
 from .contorollers.get_onsei_index import main as get_onsei_index_main
 from .contorollers import create_animan_video
+from .contorollers import create_reaction_script
 import os
 import shutil
 import tempfile
@@ -62,6 +63,30 @@ def register_routes(app):
         voices = Voice.query.all()
         return render_template('create_animan_script.html', voices=voices)
 
+    @app.route('/create_reaction_script', methods=['GET', 'POST'])
+    def create_reaction_script_page():
+        if request.method == 'POST':
+            try:
+                csv_name, warnings = create_reaction_script.main(
+                    request.form.get('urls', '').split(),
+                    request.form.getlist('saved_files'),
+                    request.form.get('theme', ''),
+                    request.form.get('copyright', ''),
+                    request.form.get('hashtags', ''),
+                    request.form.get('title_voice'),
+                    request.form.getlist('narration_voices[]'),
+                )
+                for warning in warnings:
+                    flash(warning)
+                session['message'] = f'反応集の台本を作成しました: {csv_name}'
+                return redirect(url_for('success'))
+            except Exception as e:
+                flash(f'エラーが発生しました: {str(e)}')
+                return redirect(url_for('error'))
+        voices = Voice.query.all()
+        return render_template('create_reaction_script.html', voices=voices,
+                               saved_threads=create_reaction_script.list_saved_threads())
+
     @app.route('/create_animan_video', methods=['GET', 'POST'])
     def create_animan_video_page():
         if request.method == 'POST':
@@ -96,10 +121,12 @@ def register_routes(app):
     def video_list():
         video_dir = os.path.abspath(create_animan_video.VIDEO_DIR)
         videos = []
+        descriptions = []
         if os.path.isdir(video_dir):
             names = [f for f in os.listdir(video_dir) if f.endswith('.mp4')]
             videos = sorted(names, key=lambda f: os.path.getmtime(os.path.join(video_dir, f)), reverse=True)
-        return render_template('video_list.html', videos=videos)
+            descriptions = [f for f in os.listdir(video_dir) if f.endswith('_説明文.txt')]
+        return render_template('video_list.html', videos=videos, descriptions=descriptions)
 
     @app.route('/videos/<path:filename>')
     def video_file(filename):
