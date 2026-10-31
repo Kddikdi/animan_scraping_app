@@ -11,11 +11,13 @@ silent=True の場合は音声合成をせず、文字数から表示時間を�
 
 台本に設定ファイル(.meta.json)があれば反応集レイアウト（中央にコマ、下部に字幕）で作成し、
 元スレURLを先頭に書いた説明文も出力する（create_reaction_scriptで作成）
+反応集では背景に動画を指定でき、画面を透過で描画してループ再生する動画に重ねる
 """
 import csv
 import io
 import json
 import os
+import random
 import shutil
 import subprocess
 import tempfile
@@ -30,6 +32,8 @@ from . import thumbnail_template
 SCRIPT_DIR = "台本ファイル"
 VIDEO_DIR = "出力動画"
 PANEL_DIR = "コマ画像"
+BACKGROUND_VIDEO_DIR = "背景動画"
+PEXELS_SEARCH_URL = "https://api.pexels.com/videos/search"
 BOARD_NAME = "あにまん掲示板"
 
 # 画面設定
@@ -95,7 +99,7 @@ KINSOKU_HEAD = "、。，．・：；？！ー）」』】〕〉》’”ぁぃ�
 
 
 def main(csv_name, background_path=None, bgm_path=None, voicevox_url="http://127.0.0.1:50021",
-         speed=1.2, bgm_volume=0.12, silent=False):
+         speed=1.2, bgm_volume=0.12, silent=False, background_video=None):
     """台本CSVから動画を作成し、出力したmp4のパスを返す"""
     csv_path = csv_name if os.path.isfile(csv_name) else os.path.join(SCRIPT_DIR, csv_name)
     rows = read_script(csv_path)
@@ -107,6 +111,9 @@ def main(csv_name, background_path=None, bgm_path=None, voicevox_url="http://127
     ffmpeg = find_ffmpeg()
     font_path = find_font()
     background = make_background(background_path)
+    # 背景動画を重ねるので画面は透過で描画する
+    background_video = background_video if meta else None
+    page_background = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0)) if background_video else background
 
     # 長文を分割して1画面ごとのページにする
     pages = make_pages(rows, MAX_SUBTITLE_CHARS if meta else MAX_CHARS_PER_PAGE)
@@ -132,7 +139,7 @@ def main(csv_name, background_path=None, bgm_path=None, voicevox_url="http://127
 
             # 画像
             if meta:
-                image = render_reaction_page(page, background, font_path, meta.get("copyright", ""))
+                image = render_reaction_page(page, page_background, font_path, meta.get("copyright", ""))
             else:
                 image = render_page(page, title, background, font_path, colors)
             image_path = os.path.join(work_dir, f"{i:04d}.png")
@@ -146,7 +153,7 @@ def main(csv_name, background_path=None, bgm_path=None, voicevox_url="http://127
         write_concat_list(list_path, segments)
 
         output_path = base_name + ".mp4"
-        encode_video(ffmpeg, list_path, audio_path, bgm_path, bgm_volume, output_path)
+        encode_video(ffmpeg, list_path, audio_path, bgm_path, bgm_volume, output_path, background_video)
         write_srt(base_name + ".srt", segments)
         if meta:
             save_thumbnail(csv_path)
@@ -435,12 +442,12 @@ def draw_panel(image, draw, page, font_path):
 
 
 def render_reaction_page(page, background, font_path, copyright_text):
-    image = background.copy()
+    image = background.convert("RGBA")
     draw = ImageDraw.Draw(image)
     draw_panel(image, draw, page, font_path)
 
     band = Image.new("RGBA", (WIDTH, HEIGHT - SUBTITLE_BAND_TOP), (0, 0, 0, 215))
-    image.paste(band, (0, SUBTITLE_BAND_TOP), band)
+    image.alpha_composite(band, (0, SUBTITLE_BAND_TOP))
 
     fill, stroke = SUBTITLE_COLORS[page["res_no"] % len(SUBTITLE_COLORS)]
     font, lines, line_height = fit_text(draw, page["text"], font_path, WIDTH - SUBTITLE_MARGIN_X * 2,
@@ -509,6 +516,49 @@ def find_ffmpeg():
     return path
 
 
+def list_background_videos():
+    if not os.path.isdir(BACKGROUND_VIDEO_DIR):
+        return []
+    return sorted(f for f in os.listdir(BACKGROUND_VIDEO_DIR) if f.lower().endswith((".mp4", ".mov", ".webm")))
+
+
+def resolve_background_video(choice, keyword=""):
+    """画面の選択内容から背景動画のパスを返す。キーワードがあればPexelsから取得する"""
+    if keyword:
+        return download_pexels_video(keyword)
+    videos = list_background_videos()
+    if choice == "random" and videos:
+        choice = random.choice(videos)
+    return os.path.join(BACKGROUND_VIDEO_DIR, choice) if choice in videos else None
+
+
+def download_pexels_video(keyword):
+    """Pexelsで横長の動画を検索して背景動画フォルダに保存し、パスを返す"""
+    api_key = os.environ.get("PEXELS_API_KEY")
+    if not api_key:
+        raise RuntimeError("環境変数PEXELS_API_KEYを設定してください（pexels.comで無料取得）")
+    response = requests.get(PEXELS_SEARCH_URL, headers={"Authorization": api_key}, timeout=30,
+                            params={"query": keyword, "orientation": "landscape", "per_page": 15})
+    response.raise_for_status()
+    videos = response.json()["videos"]
+    if not videos:
+        raise ValueError(f"Pexelsに動画が見つかりませんでした: {keyword}")
+    video = random.choice(videos)
+    # 1080pに近いmp4を選ぶ
+    files = [f for f in video["video_files"] if f.get("file_type") == "video/mp4" and f.get("height")]
+    best = min(files, key=lambda f: abs(f["height"] - HEIGHT))
+
+    os.makedirs(BACKGROUND_VIDEO_DIR, exist_ok=True)
+    path = os.path.join(BACKGROUND_VIDEO_DIR, f"pexels_{video['id']}.mp4")
+    if not os.path.isfile(path):
+        with requests.get(best["link"], stream=True, timeout=60) as download:
+            download.raise_for_status()
+            with open(path, "wb") as f:
+                for chunk in download.iter_content(chunk_size=1024 * 1024):
+                    f.write(chunk)
+    return path
+
+
 def list_reaction_scripts():
     """反応集の台本（設定ファイルがあるもの）の一覧"""
     return [f for f in list_scripts() if read_meta(os.path.join(SCRIPT_DIR, f))]
@@ -572,17 +622,28 @@ def write_concat_list(list_path, segments):
         f.write(f"file '{os.path.basename(segments[-1][0])}'\n")
 
 
-def encode_video(ffmpeg, list_path, audio_path, bgm_path, bgm_volume, output_path):
+def encode_video(ffmpeg, list_path, audio_path, bgm_path, bgm_volume, output_path, background_video=None):
     command = [ffmpeg, "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", list_path, "-i", audio_path]
+    filters = []
+    video_map, audio_map = "0:v", "1:a"
+    next_input = 2
     if bgm_path:
-        command += ["-stream_loop", "-1", "-i", bgm_path,
-                    "-filter_complex",
-                    f"[2:a]volume={bgm_volume}[bgm];[1:a][bgm]amix=inputs=2:duration=first:normalize=0[a]",
-                    "-map", "0:v", "-map", "[a]"]
-    else:
-        command += ["-map", "0:v", "-map", "1:a"]
-    command += ["-r", str(FPS), "-c:v", "libx264", "-tune", "stillimage", "-pix_fmt", "yuv420p",
-                "-c:a", "aac", "-b:a", "192k", "-shortest", output_path]
+        command += ["-stream_loop", "-1", "-i", bgm_path]
+        filters.append(f"[{next_input}:a]volume={bgm_volume}[bgm];[1:a][bgm]amix=inputs=2:duration=first:normalize=0[a]")
+        audio_map = "[a]"
+        next_input += 1
+    if background_video:
+        # 背景動画をループして画面いっぱいに切り抜き、透過の画面を重ねる
+        command += ["-stream_loop", "-1", "-i", background_video]
+        filters.append(f"[{next_input}:v]scale={WIDTH}:{HEIGHT}:force_original_aspect_ratio=increase,"
+                       f"crop={WIDTH}:{HEIGHT},setsar=1,fps={FPS}[bg];"
+                       f"[0:v]format=rgba,fps={FPS}[fg];[bg][fg]overlay=shortest=1[v]")
+        video_map = "[v]"
+    if filters:
+        command += ["-filter_complex", ";".join(filters)]
+    command += ["-map", video_map, "-map", audio_map, "-r", str(FPS), "-c:v", "libx264"]
+    command += ["-preset", "veryfast", "-crf", "23"] if background_video else ["-tune", "stillimage"]
+    command += ["-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-shortest", output_path]
     result = subprocess.run(command, capture_output=True, text=True)
     if result.returncode != 0:
         raise RuntimeError(f"ffmpegでエラーが発生しました: {result.stderr}")

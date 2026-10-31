@@ -144,6 +144,8 @@ def register_routes(app):
                         path = os.path.join(work_dir, key + os.path.splitext(file.filename)[1])
                         file.save(path)
                         uploads[key] = path
+                background_video = create_animan_video.resolve_background_video(
+                    request.form.get('background_video', ''), request.form.get('pexels_keyword', '').strip())
                 output_path = create_animan_video.main(
                     request.form['csv_name'],
                     background_path=uploads.get('background'),
@@ -151,6 +153,7 @@ def register_routes(app):
                     voicevox_url=request.form.get('voicevox_url') or 'http://127.0.0.1:50021',
                     speed=float(request.form.get('speed') or 1.2),
                     silent=bool(request.form.get('silent')),
+                    background_video=background_video,
                 )
                 flash(f'動画作成が完了しました: {os.path.basename(output_path)}')
                 return redirect(url_for('video_list'))
@@ -159,7 +162,8 @@ def register_routes(app):
                 return redirect(url_for('error'))
             finally:
                 shutil.rmtree(work_dir, ignore_errors=True)
-        return render_template('create_animan_video.html', scripts=create_animan_video.list_scripts())
+        return render_template('create_animan_video.html', scripts=create_animan_video.list_scripts(),
+                               background_videos=create_animan_video.list_background_videos())
 
     @app.route('/videos')
     def video_list():

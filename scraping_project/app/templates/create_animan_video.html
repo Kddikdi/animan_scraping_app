@@ -20,6 +20,20 @@
         <label for="background">背景画像（任意）:</label>
         <input type="file" id="background" name="background" accept="image/*"><br>
 
+        <label for="background_video">背景動画（反応集の台本のみ）:</label>
+        <select id="background_video" name="background_video">
+            <option value="">なし</option>
+            <option value="random" {% if background_videos %}selected{% endif %}>ランダム</option>
+            {% for video in background_videos %}
+            <option value="{{ video }}">{{ video }}</option>
+            {% endfor %}
+        </select>
+        <p>※フリー動画を scraping_project/背景動画 に置くと選択できます。</p>
+
+        <label for="pexels_keyword">Pexelsから背景動画を取得（検索キーワード・英語推奨・任意）:</label>
+        <input type="text" id="pexels_keyword" name="pexels_keyword" placeholder="soccer">
+        <p>※環境変数 PEXELS_API_KEY の設定が必要です。指定すると上の選択より優先します。</p>
+
         <label for="bgm">BGM（任意）:</label>
         <input type="file" id="bgm" name="bgm" accept="audio/*"><br>
 
