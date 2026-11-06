@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>感想サイト画像収集ページ</title>
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <h1>感想サイト画像収集</h1>
+    {% for message in get_flashed_messages() %}
+    <p>{{ message }}</p>
+    {% endfor %}
+
+    <form action="{{ url_for('find_review_sites_page') }}" method="POST">
+        <label for="title">作品:</label>
+        <select id="title" name="title">
+            {% for work in works %}
+            <option value="{{ work.title }}">{{ work.title }}</option>
+            {% endfor %}
+        </select>
+        <label for="chapters">話数:</label>
+        <input type="text" id="chapters" name="chapters" placeholder="129、129-131、最新" required>
+        <p><input type="submit" value="画像を保存"></p>
+    </form>
+
+    <h2>保存しているサイト</h2>
+    {% for work in works %}
+    <p>
+        {{ work.title }}:
+        {% for site in work.sites %}
+        <a href="https://{{ site }}/" target="_blank" rel="noopener">{{ site }}</a>
+        {% endfor %}
+        {% for past in work.past_sites %}
+        <br>過去のサイト: <a href="https://{{ past.site }}/" target="_blank" rel="noopener">{{ past.site }}</a>（{{ past.last_chapter }}話まで、{{ past.retired_on }}に差し替え）
+        {% endfor %}
+    </p>
+    {% endfor %}
+
+    <p>※{{ image_dir }}/作品/サイト/N話 画像 に保存します。参考用で、動画には使いません。</p>
+    <p>※robots.txtで禁止されたページは取得せず、拒否されたら止まります。</p>
+    <a href="{{ url_for('index') }}">HOME</a>
+</body>
+</html>

@@ -4,6 +4,7 @@ from .contorollers.get_animan_url import main as get_animan_main
 from .contorollers.get_onsei_index import main as get_onsei_index_main
 from .contorollers import create_animan_video
 from .contorollers import create_reaction_script
+from .contorollers import find_review_sites
 from .contorollers import thumbnail_template
 import os
 import shutil
@@ -87,6 +88,19 @@ def register_routes(app):
         voices = Voice.query.all()
         return render_template('create_reaction_script.html', voices=voices,
                                saved_threads=create_reaction_script.list_saved_threads())
+
+    @app.route('/find_review_sites', methods=['GET', 'POST'])
+    def find_review_sites_page():
+        if request.method == 'POST':
+            try:
+                chapters = find_review_sites.parse_chapters(request.form.get('chapters', ''))
+                for message in find_review_sites.collect_chapter_images(request.form.get('title', ''), chapters):
+                    flash(message)
+            except Exception as e:
+                flash(f'エラーが発生しました: {str(e)}')
+            return redirect(url_for('find_review_sites_page'))
+        return render_template('find_review_sites.html', works=find_review_sites.load_works(),
+                               image_dir=find_review_sites.REFERENCE_IMAGE_DIR)
 
     @app.route('/create_thumbnail', methods=['GET', 'POST'])
     def create_thumbnail_page():

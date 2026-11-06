@@ -1,0 +1,151 @@
+{
+  "works": [
+    {
+      "title": "ワンピース",
+      "sites": [
+        "onepiece-latestlab.com",
+        "yasaoblog.fun"
+      ],
+      "past_sites": [
+        {
+          "site": "eiga-manga.com",
+          "last_chapter": 1160,
+          "retired_on": "2026-11-06"
+        },
+        {
+          "site": "onp-2024.com",
+          "last_chapter": 1189,
+          "retired_on": "2026-11-06"
+        }
+      ],
+      "candidates": [
+        "d-manga.net",
+        "shinumae.oops.jp"
+      ],
+      "aliases": [
+        "ONE PIECE"
+      ],
+      "no_image_counts": {},
+      "excluded_sites": [
+        {
+          "site": "yakuzaisirabetemimasita.com",
+          "reason": "記事に画像がない",
+          "excluded_on": "2026-11-06"
+        }
+      ]
+    },
+    {
+      "title": "ブルーロック",
+      "sites": [
+        "h-snufkin.com",
+        "marukogeokoge.com"
+      ],
+      "past_sites": [],
+      "candidates": [
+        "heysay.hatenadiary.jp"
+      ]
+    },
+    {
+      "title": "カグラバチ",
+      "sites": [
+        "manga-games.com",
+        "hellominju.com"
+      ],
+      "past_sites": [
+        {
+          "site": "soundsgoood.net",
+          "last_chapter": 125,
+          "retired_on": "2026-11-06"
+        }
+      ],
+      "candidates": [
+        "manga-dome.com",
+        "miyamura-literaturediary.com",
+        "marukogeokoge.com",
+        "tyoukagura.com",
+        "kanso-onoboo.com"
+      ]
+    },
+    {
+      "title": "鵺の陰陽師",
+      "sites": [
+        "marukogeokoge.com",
+        "kaigaijumptsu.blog.jp"
+      ],
+      "past_sites": [],
+      "candidates": [
+        "pakira2.hatenablog.com",
+        "circleken.net"
+      ]
+    },
+    {
+      "title": "君のことが大大大大大好きな100人の彼女",
+      "sites": [
+        "lastbreath.hatenablog.com",
+        "v-storage.jp"
+      ],
+      "past_sites": [],
+      "candidates": [],
+      "aliases": [
+        "100カノ"
+      ]
+    },
+    {
+      "title": "ダンダダン",
+      "sites": [
+        "manga-dome.com",
+        "kamikami-mangatime.com"
+      ],
+      "past_sites": [],
+      "candidates": [
+        "manga-love.net"
+      ]
+    },
+    {
+      "title": "SAKAMOTO DAYS",
+      "sites": [
+        "comic-tanakappa.com",
+        "soundsgoood.net"
+      ],
+      "past_sites": [],
+      "candidates": [
+        "playnews.xsrv.jp",
+        "kaigaijumptsu.blog.jp",
+        "hellominju.com",
+        "jump-otona.com"
+      ],
+      "aliases": [
+        "サカモトデイズ"
+      ]
+    },
+    {
+      "title": "ワールドトリガー",
+      "sites": [
+        "eiga-manga.com"
+      ],
+      "past_sites": [],
+      "candidates": [
+        "niwakajikomi.com",
+        "manga-games.com",
+        "momiji-mypace-life.com"
+      ],
+      "aliases": [
+        "ワートリ"
+      ]
+    },
+    {
+      "title": "葬送のフリーレン",
+      "sites": [
+        "manga-games.com",
+        "h-snufkin.com"
+      ],
+      "past_sites": [],
+      "candidates": [
+        "newstisiki.com"
+      ],
+      "aliases": [
+        "フリーレン"
+      ]
+    }
+  ]
+}
