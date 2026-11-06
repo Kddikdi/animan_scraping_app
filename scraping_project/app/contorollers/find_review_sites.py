@@ -3,6 +3,7 @@
     ・作品とサイトのURLは 感想サイト/data.json に保存してある
     ・画像は依頼された話の分だけ 参考画像/<作品>/<サイト>/<N>話 画像/ に保存する。動画の素材（コマ画像）とは分ける
     ・記事に出典が書かれた画像は、その中の「出典 102巻」のようなサブフォルダに分ける
+    ・白黒のコマに色付きの文字等を重ねた加工画像は保存しない（カラーページは残す）
     ・記事が見つからないときは理由を判定する。更新をやめたサイトは過去のサイト（past_sites）に移して
       候補（candidates）から差し替える。過去のサイトも最後に更新していた話までは使う
 """
@@ -30,8 +31,10 @@ MAX_ARTICLES = 3
 TOP_SITES = 2
 MAX_CHAPTERS = 10
 CATEGORY_PAGES = 10
-# 先の展開の予想（「1199話以降考察」「1198話展開予想」）と発売前の流出情報は、その話の記事として扱わない
-NOT_CHAPTER_ARTICLE = re.compile(r"\d+\s*話\s*(?:以降|以後)|予想|早バレ|確定速報")
+# 先の展開の予想（「1199話以降考察」「1198話展開予想」）、発売前の流出情報、アニメの話数は、漫画のその話の記事として扱わない
+NOT_CHAPTER_ARTICLE = re.compile(r"\d+\s*話\s*(?:以降|以後)|予想|早バレ|確定速報|アニメ")
+# 話数の書き方（「55話」「第55話」「#55」）
+CHAPTER_NUMBER = re.compile(r"(?<!\d)(\d+)\s*話|#\s*(\d+)(?!\d)")
 # 公開済みの最新話からこの話数以上遅れているサイトは更新をやめたとみなす
 STALE_GAP = 3
 # 記事はあるのに画像がない回がこの回数続いたサイトは、文章だけのサイトとみなして外す
@@ -82,6 +85,29 @@ def compact(text):
     return re.sub(r"\s+", "", unicodedata.normalize("NFKC", text)).lower()
 
 
+_site_titles = {}
+_site_bases = {}
+
+
+def site_base(site):
+    """サイトのURL。www.付きでしか証明書が通らないサイトがあるので、つながらなければwww.付きにする"""
+    if site not in _site_bases:
+        _site_bases[site] = f"https://{site}"
+        try:
+            requests.head(f"https://{site}/", timeout=30)
+        except requests.exceptions.SSLError:
+            _site_bases[site] = f"https://www.{site}"
+    return _site_bases[site]
+
+
+def site_title(site):
+    """サイトのトップページのタイトル（サイト名）。検索結果のページは検索語をタイトルに含むので使わない"""
+    if site not in _site_titles:
+        soup = fetch_listing(f"{site_base(site)}/")
+        _site_titles[site] = soup.title.get_text() if soup is not None and soup.title else ""
+    return _site_titles[site]
+
+
 def work_names(title):
     """作品名と別名（data.jsonのaliases）"""
     work = next((work for work in load_works() if work["title"] == title), {})
@@ -94,14 +120,14 @@ def linked_chapters(soup, base_url, site, title):
     サイト名に作品名が入っている専門サイトは、記事タイトルに作品名を書かないことが多いので、話数だけで拾う
     """
     names = work_names(title)
-    dedicated = soup.title is not None and any(name in compact(soup.title.get_text()) for name in names)
+    dedicated = any(name in compact(site_title(site)) for name in names)
     chapters = []
     for link in soup.find_all("a", href=True):
         text = unicodedata.normalize("NFKC", link.get_text(" ", strip=True))
         url = urljoin(base_url, link["href"]).split("#")[0]
         named = dedicated or any(name in compact(text) for name in names)
         if named and same_site(url, site) and not NOT_CHAPTER_ARTICLE.search(text):
-            chapters += [(int(number), url) for number in re.findall(r"(?<!\d)(\d+)\s*話", text)]
+            chapters += [(int(number or hashed), url) for number, hashed in CHAPTER_NUMBER.findall(text)]
     return chapters
 
 
@@ -120,7 +146,7 @@ def pick_articles(articles, chapter):
 
 def find_articles(site, title, chapter):
     """保存したサイトの中から指定の話の記事を探す"""
-    base = f"https://{site}"
+    base = site_base(site)
     # WordPressのサイト内検索。「作品名 N話」では引っかからない記事があるので、話数だけでも検索して合わせる
     articles = []
     for query in (f"{title} {chapter}話", str(chapter)):
@@ -153,7 +179,7 @@ def find_articles(site, title, chapter):
 
 def latest_chapter(site, title):
     """サイトの作品の一覧から、掲載されている最新の話数を返す。判定できなければNone"""
-    base = f"https://{site}"
+    base = site_base(site)
     urls = (f"{base}/?s={quote_plus(title)}", f"{base}/search?q={quote_plus(title)}",
             f"{base}/archive/category/{quote(title)}")
     numbers = []
@@ -294,7 +320,7 @@ def collect_from_site(site, title, chapter):
         articles = find_articles(site, title, chapter)
         if not articles:
             return "記事が見つかりませんでした", "missing"
-        saved = sum(len(fetch_page_images(url, folder, by_source=True)) for url in articles)
+        saved = sum(len(fetch_page_images(url, folder, by_source=True, skip_overlay=True)) for url in articles)
     except (PermissionError, requests.RequestException) as e:
         return f"取得を止めました ({e})", "stopped"
     return f"{len(articles)}記事から{saved}枚を保存しました", "found" if saved else "no_images"

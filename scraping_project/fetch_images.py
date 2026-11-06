@@ -7,6 +7,7 @@
     ・robots.txtで禁止されているページは取得しない。403・429が返ったら回避せずに止める
     ・保存した画像は 0001.jpg のように連番で、元ページと画像ごとのURL・出典は 取得元.txt に残る
     ・--by-source を付けると、記事に出典が書かれた画像を「出典 102巻」のようなサブフォルダに分ける
+    ・--skip-overlay を付けると、白黒のコマに色付きの文字等を重ねた加工画像は保存しない（カラーページは残す）
     ・取得した画像の権利は権利者にある。使い方は利用者の責任で判断する
 """
 import argparse
@@ -21,21 +22,33 @@ from urllib.parse import urljoin, urlparse
 
 import requests
 from bs4 import BeautifulSoup
-from PIL import Image
+from PIL import Image, ImageChops
 
 REQUEST_INTERVAL_SEC = 2
 IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp", ".gif")
 FORMAT_EXTENSIONS = {"JPEG": ".jpg", "PNG": ".png", "WEBP": ".webp", "GIF": ".gif"}
 # 記事内の商品リンクの画像（単行本の表紙等）は保存しない
 AD_IMAGE_HOSTS = ("media-amazon.com", "images-amazon.com", "thumbnail.image.rakuten.co.jp")
+# 会話形式の吹き出しのアイコン、筆者紹介、商品紹介の中の画像は記事の画像ではない
+NOT_CONTENT_CLASS = re.compile(r"avatar|speech|balloon|author|profile|commerce|product|goods|affiliate", re.IGNORECASE)
 # 出典の書き方（「出典:◯◯」「引用：◯◯」「© 作者 ◯◯話より」）
 SOURCE_TEXT = re.compile(r"^\s*(?:画像)?(?:出典|引用)|^\s*(?:©|\(c\)|（c）)|より\s*$", re.IGNORECASE)
+# 白黒のコマに色付きの文字等を重ねた加工の判定。白黒の漫画は鮮やかな色の画素（RGBの差がVIVID_CHROMA以上）が0で、
+# 加工した画像は色の付いた画素（差がCOLOR_CHROMA以上）が文字の部分だけ、かつ文字の1〜2色だけになる。
+# カラーページは色が画像全体に広がるか、背景が白くても肌・服・髪などいろいろな色が混ざる
+COLOR_CHROMA = 40
+VIVID_CHROMA = 80
+MIN_OVERLAY_VIVID_RATIO = 0.001
+MAX_OVERLAY_COLOR_RATIO = 0.10
+HUE_BINS = 12
+MIN_OVERLAY_TOP2_HUE_SHARE = 0.95
 
 
-def main(url, folder, min_side=300, by_source=False):
+def main(url, folder, min_side=300, by_source=False, skip_overlay=False):
     """画像を保存し、保存したファイルのパスのリストを返す
 
     by_source=True なら、記事に出典（「出典:ONE PIECE 102巻」等）が書かれた画像を「出典 102巻」のようなサブフォルダに分ける
+    skip_overlay=True なら、白黒のコマに色付きの文字やマークを重ねた加工画像は保存しない
     """
     if not allowed_by_robots(url):
         raise PermissionError(f"robots.txtで禁止されているため取得しません: {url}")
@@ -56,7 +69,9 @@ def main(url, folder, min_side=300, by_source=False):
         if image_response.status_code in (403, 429):
             raise PermissionError(f"サイトに拒否されました(HTTP {image_response.status_code})。回避はしません: {src}")
         extension = image_extension(image_response, min_side)
-        if extension:
+        if extension and skip_overlay and has_color_overlay(image_response.content):
+            log.append(f"  除外（色付きの文字等の加工）  {src}")
+        elif extension:
             target = os.path.join(folder, f"出典 {source_label(source)}") if by_source and source else folder
             os.makedirs(target, exist_ok=True)
             path = os.path.join(target, f"{next_number(target):04d}{extension}")
@@ -99,6 +114,8 @@ def find_images(soup, base_url):
     body = soup.select_one(".entry-content") or soup.select_one("article") or soup
     images = {}
     for tag in body.find_all("img"):
+        if not_content(tag, body):
+            continue
         link = tag.find_parent("a", href=True)
         if link and link["href"].lower().split("?")[0].endswith(IMAGE_EXTENSIONS):
             src = link["href"]
@@ -110,6 +127,16 @@ def find_images(soup, base_url):
         if src and not src.startswith("data:"):
             images.setdefault(urljoin(base_url, src), image_source(tag))
     return [(url, source) for url, source in images.items() if not urlparse(url).hostname.endswith(AD_IMAGE_HOSTS)]
+
+
+def not_content(tag, body):
+    """本文の中で、吹き出しのアイコンや商品紹介の枠に入った画像か（本文より外側のclassは見ない）"""
+    for parent in tag.parents:
+        if parent is body:
+            return False
+        if NOT_CONTENT_CLASS.search(" ".join(parent.get("class", []))):
+            return True
+    return False
 
 
 def image_source(tag):
@@ -159,11 +186,33 @@ def image_extension(response, min_side):
         return None
 
 
+def has_color_overlay(content):
+    """白黒のコマに色付きの文字やマークを重ねた加工画像か
+
+    鮮やかな色が画像の一部に1〜2色だけあれば、白黒の上に色を足したものとみなす。
+    電子版等のカラーページは残る。カラー画像に重ねた文字は判別できない
+    """
+    with Image.open(io.BytesIO(content)) as image:
+        image = image.convert("RGB").resize((300, 300))
+    red, green, blue = image.split()
+    chroma = list(ImageChops.lighter(ImageChops.lighter(ImageChops.difference(red, green), ImageChops.difference(green, blue)),
+                                     ImageChops.difference(red, blue)).getdata())
+    vivid_hues = [hue * HUE_BINS // 256 for hue, value in zip(image.convert("HSV").getchannel("H").getdata(), chroma)
+                  if value >= VIVID_CHROMA]
+    if len(vivid_hues) / len(chroma) <= MIN_OVERLAY_VIVID_RATIO:
+        return False
+    if sum(value >= COLOR_CHROMA for value in chroma) / len(chroma) > MAX_OVERLAY_COLOR_RATIO:
+        return False
+    counts = sorted(vivid_hues.count(hue_bin) for hue_bin in range(HUE_BINS))
+    return sum(counts[-2:]) / len(vivid_hues) >= MIN_OVERLAY_TOP2_HUE_SHARE
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="ページの画像を指定フォルダに保存する")
     parser.add_argument("url")
     parser.add_argument("folder")
     parser.add_argument("--min-side", type=int, default=300, help="これより小さい画像は保存しない(px)")
     parser.add_argument("--by-source", action="store_true", help="出典が書かれた画像を出典ごとのサブフォルダに分ける")
+    parser.add_argument("--skip-overlay", action="store_true", help="白黒のコマに色付きの文字等を重ねた加工画像は保存しない")
     args = parser.parse_args()
-    main(args.url, args.folder, args.min_side, args.by_source)
+    main(args.url, args.folder, args.min_side, args.by_source, args.skip_overlay)
