@@ -12,6 +12,7 @@
 """
 import argparse
 import io
+import json
 import os
 import re
 import time
@@ -42,6 +43,9 @@ MIN_OVERLAY_VIVID_RATIO = 0.001
 MAX_OVERLAY_COLOR_RATIO = 0.10
 HUE_BINS = 12
 MIN_OVERLAY_TOP2_HUE_SHARE = 0.95
+# 画像ごとの手がかり（記事で前後に書かれた文章等）を保存するファイル。動画のコマを選ぶときに使う
+IMAGE_INFO_FILE = "画像情報.json"
+CONTEXT_CHARS = 150
 
 
 def main(url, folder, min_side=300, by_source=False, skip_overlay=False):
@@ -58,9 +62,12 @@ def main(url, folder, min_side=300, by_source=False, skip_overlay=False):
     response.raise_for_status()
 
     os.makedirs(folder, exist_ok=True)
+    soup = BeautifulSoup(response.text, "html.parser")
+    contexts = image_contexts(soup, url)
     saved = []
     log = []
-    for src, source in find_images(BeautifulSoup(response.text, "html.parser"), url):
+    info = []
+    for src, source in find_images(soup, url):
         time.sleep(REQUEST_INTERVAL_SEC)
         try:
             image_response = requests.get(src, timeout=30, headers={"Referer": url})
@@ -79,10 +86,13 @@ def main(url, folder, min_side=300, by_source=False, skip_overlay=False):
                 f.write(image_response.content)
             saved.append(path)
             log.append(f"  {os.path.relpath(path, folder)}  {src}" + (f"  （{source}）" if source else ""))
+            info.append({"file": os.path.relpath(path, folder), "url": src, "page": url, "source": source,
+                         "context": contexts.get(src, "")})
             print(f"保存: {path}  {src}")
 
     with open(os.path.join(folder, "取得元.txt"), "a", encoding="utf-8") as f:
         f.write(f"{date.today()} {url} {len(saved)}枚\n" + "".join(line + "\n" for line in log))
+    save_image_info(folder, info)
     print(f"{len(saved)}枚を保存しました: {folder}")
     return saved
 
@@ -108,11 +118,64 @@ def find_image_urls(soup, base_url):
     return [url for url, _ in find_images(soup, base_url)]
 
 
+def save_image_info(folder, info):
+    """画像ごとの手がかり（記事で前後に書かれた文章・出典）を 画像情報.json に追記する"""
+    path = os.path.join(folder, IMAGE_INFO_FILE)
+    entries = []
+    if os.path.isfile(path):
+        with open(path, encoding="utf-8") as f:
+            entries = json.load(f)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(entries + info, f, ensure_ascii=False, indent=2)
+
+
 def find_images(soup, base_url):
     """記事本文の画像を (URL, 出典の文 または None) で出現順に返す。画像へのリンクがあれば原寸を優先する"""
-    # 関連記事のサムネイル等が混ざらないよう、本文があれば本文だけを見る
-    body = soup.select_one(".entry-content") or soup.select_one("article") or soup
     images = {}
+    for url, tag in image_tags(soup, base_url):
+        images.setdefault(url, image_source(tag))
+    return list(images.items())
+
+
+def image_contexts(soup, base_url):
+    """記事本文の画像ごとに、記事で画像の前後に書かれた文章を返す {URL: 文章}"""
+    body = article_body(soup)
+    contexts = {}
+    for url, tag in image_tags(soup, base_url):
+        block = tag
+        while block.parent is not None and block.parent is not body:
+            block = block.parent
+        before = nearby_text(block.find_previous_siblings())
+        after = nearby_text(block.find_next_siblings())
+        contexts.setdefault(url, " ".join(part for part in (tag.get("alt", ""), before, after) if part))
+    return contexts
+
+
+def nearby_text(siblings):
+    """隣の画像の手前まで、CONTEXT_CHARS字程度の文章を集める"""
+    texts = []
+    for sibling in siblings:
+        if not hasattr(sibling, "get_text"):
+            continue
+        if sibling.name == "img" or sibling.find("img"):
+            break
+        text = sibling.get_text(" ", strip=True)
+        if text:
+            texts.append(text)
+        if sum(map(len, texts)) >= CONTEXT_CHARS:
+            break
+    return " ".join(texts)[:CONTEXT_CHARS * 2]
+
+
+def article_body(soup):
+    # 関連記事のサムネイル等が混ざらないよう、本文があれば本文だけを見る
+    return soup.select_one(".entry-content") or soup.select_one("article") or soup
+
+
+def image_tags(soup, base_url):
+    """記事本文の画像を (URL, imgタグ) で出現順に返す。広告・アイコン等は除く"""
+    body = article_body(soup)
+    images = []
     for tag in body.find_all("img"):
         if not_content(tag, body):
             continue
@@ -125,8 +188,8 @@ def find_images(soup, base_url):
             src = largest_in_srcset(srcset) if srcset else None
             src = src or next((tag.get(name) for name in ("data-src", "data-lazy-src", "data-original", "src") if tag.get(name)), None)
         if src and not src.startswith("data:"):
-            images.setdefault(urljoin(base_url, src), image_source(tag))
-    return [(url, source) for url, source in images.items() if not urlparse(url).hostname.endswith(AD_IMAGE_HOSTS)]
+            images.append((urljoin(base_url, src), tag))
+    return [(url, tag) for url, tag in images if not urlparse(url).hostname.endswith(AD_IMAGE_HOSTS)]
 
 
 def not_content(tag, body):

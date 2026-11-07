@@ -40,3 +40,5 @@ webdriver_manager==4.0.2
 openpyxl==3.1.5
 Flask-SQLAlchemy==3.1.1
 Pillow==10.4.0
+manga-ocr
+opencv-python-headless

@@ -4,6 +4,7 @@
     ・画像は依頼された話の分だけ 参考画像/<作品>/<サイト>/<N>話 画像/ に保存する。動画の素材（コマ画像）とは分ける
     ・記事に出典が書かれた画像は、その中の「出典 102巻」のようなサブフォルダに分ける
     ・白黒のコマに色付きの文字等を重ねた加工画像は保存しない（カラーページは残す）
+    ・集めた画像の吹き出しの文字を読み取り、記事の文章からキャラの別名を覚える（動画のコマ割り当て用）
     ・記事が見つからないときは理由を判定する。更新をやめたサイトは過去のサイト（past_sites）に移して
       候補（candidates）から差し替える。過去のサイトも最後に更新していた話までは使う
 """
@@ -21,6 +22,7 @@ from bs4 import BeautifulSoup
 from fetch_images import IMAGE_EXTENSIONS, allowed_by_robots
 from fetch_images import main as fetch_page_images
 from .create_animan_video import safe_file_name
+from .image_reading import learn_characters, read_ocr
 
 DATA_FILE = os.path.join("感想サイト", "data.json")
 REFERENCE_IMAGE_DIR = "参考画像"
@@ -267,6 +269,8 @@ def collect_chapter(work, chapter, released, latest):
         found = found or status in ("found", "saved", "no_images")
         if status == "missing":
             missing.append(site)
+        if status == "found":
+            messages += read_image_clues(work, chapter_folder(title, site, chapter))
         if count_no_images(work, site, status):
             # 文章だけのサイトを外し、差し替えたサイトからも同じ話を集める
             messages.append(f"{site}: 記事に画像が{NO_IMAGE_LIMIT}回続けてありませんでした。画像のないサイトとして外しました")
@@ -276,11 +280,20 @@ def collect_chapter(work, chapter, released, latest):
     # 更新をやめたサイトも、更新していた話までは使う
     for past in work["past_sites"]:
         if chapter <= past["last_chapter"]:
-            result, _ = collect_from_site(past["site"], title, chapter)
+            result, status = collect_from_site(past["site"], title, chapter)
             messages.append(f"{past['site']} {chapter}話（過去のサイト）: {result}")
+            if status == "found":
+                messages += read_image_clues(work, chapter_folder(title, past["site"], chapter))
     for site in missing:
         messages.append(f"{site} {chapter}話: {missing_reason(chapter, latest.get(site), released, found)}")
     return messages
+
+
+def read_image_clues(work, folder):
+    """集めた画像の吹き出しの文字を読み取り、記事の文章からキャラの別名を覚える（動画のコマ割り当てで使う）"""
+    read_ocr(folder)
+    added = learn_characters(work.setdefault("characters", {}), folder)
+    return [f"キャラの別名を追加しました: {'、'.join(added)}"] if added else []
 
 
 def count_no_images(work, site, status):
