@@ -26,7 +26,7 @@ import wave
 import requests
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
-from . import thumbnail_template
+from . import reading_dict, thumbnail_template
 
 # 出力先・入力元
 SCRIPT_DIR = "台本ファイル"
@@ -120,6 +120,10 @@ def main(csv_name, background_path=None, bgm_path=None, voicevox_url="http://127
     colors = assign_colors(pages)
 
     tts = None if silent else VoicevoxClient(voicevox_url, speed)
+    if tts:
+        # キャラ名等の読み間違いを直すため、VOICEVOXのユーザー辞書に読みを登録する
+        readings = {**reading_dict.COMMON_READINGS, **reading_dict.work_readings(meta.get("theme", title) if meta else title)}
+        reading_dict.register(voicevox_url, readings)
 
     os.makedirs(VIDEO_DIR, exist_ok=True)
     base_name = os.path.join(VIDEO_DIR, safe_file_name(title))
@@ -270,7 +274,8 @@ class VoicevoxClient:
 
     def synthesize(self, voice, text):
         speaker = self.speaker_id(voice)
-        query = requests.post(f"{self.url}/audio_query", params={"text": text, "speaker": speaker}, timeout=60)
+        query = requests.post(f"{self.url}/audio_query", params={"text": reading_dict.speech_text(text), "speaker": speaker},
+                              timeout=60)
         query.raise_for_status()
         query_json = query.json()
         query_json["speedScale"] = self.speed
